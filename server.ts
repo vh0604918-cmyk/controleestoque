@@ -10,6 +10,22 @@ async function startServer() {
   // Middlewares
   app.use(express.json({ limit: '10mb' }));
 
+  // CORS Middleware para garantir comunicação segura em qualquer ambiente/iframe
+  app.use((req: Request, res: Response, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(200);
+    }
+    next();
+  });
+
+  // Favicon silencioso para evitar 404 no console
+  app.get('/favicon.ico', (req: Request, res: Response) => {
+    res.status(204).end();
+  });
+
   // --- ROTAS DA API ---
 
   // Health check
@@ -111,6 +127,15 @@ async function startServer() {
     }
   });
 
+  app.get('/api/materials/:id', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const material = db.getMaterials().find(m => m.id === id);
+    if (!material) {
+      return res.status(404).json({ error: 'Material não encontrado.' });
+    }
+    res.json(material);
+  });
+
   app.put('/api/materials/:id', (req: Request, res: Response) => {
     const { id } = req.params;
     const updated = db.updateMaterial(id, req.body);
@@ -153,6 +178,15 @@ async function startServer() {
     } catch (err: any) {
       res.status(500).json({ error: 'Falha ao cadastrar setor: ' + err.message });
     }
+  });
+
+  app.get('/api/departments/:id', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const dept = db.getDepartments().find(d => d.id === id);
+    if (!dept) {
+      return res.status(404).json({ error: 'Setor não encontrado.' });
+    }
+    res.json(dept);
   });
 
   app.put('/api/departments/:id', (req: Request, res: Response) => {
@@ -262,6 +296,15 @@ async function startServer() {
     }
   });
 
+  app.get('/api/requisitions/:id', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const reqItem = db.getRequisitions().find(r => r.id === id);
+    if (!reqItem) {
+      return res.status(404).json({ error: 'Requisição não encontrada.' });
+    }
+    res.json(reqItem);
+  });
+
   app.put('/api/requisitions/:id/status', (req: Request, res: Response) => {
     const { id } = req.params;
     const { status, authorizedBy } = req.body;
@@ -304,6 +347,13 @@ async function startServer() {
   app.post('/api/backup/reset-demo', (req: Request, res: Response) => {
     db.resetToSeed();
     res.json({ message: 'Base de demonstração restaurada com sucesso.' });
+  });
+
+  // Catch-all para rotas de API não encontradas (sempre responde JSON, nunca HTML)
+  app.all('/api/*', (req: Request, res: Response) => {
+    res.status(404).json({
+      error: `Rota de API não encontrada: ${req.method} ${req.path}`
+    });
   });
 
   // --- VITE MIDDLEWARE ---
