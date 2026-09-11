@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Department, Material } from '../types.ts';
+import { ConfirmModal } from './ConfirmModal.tsx';
 import {
   Building2,
   Plus,
@@ -32,8 +33,10 @@ export const DepartmentsView: React.FC<DepartmentsViewProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDept, setEditingDept] = useState<Department | null>(null);
+  const [deptToDelete, setDeptToDelete] = useState<{ id: string; name: string } | null>(null);
   const [selectedDeptForDetails, setSelectedDeptForDetails] = useState<Department | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form states
@@ -102,13 +105,27 @@ export const DepartmentsView: React.FC<DepartmentsViewProps> = ({
     }
   };
 
-  const handleDelete = async (id: string, deptName: string) => {
-    if (window.confirm(`Tem certeza que deseja excluir o setor "${deptName}"?`)) {
-      try {
-        await onDeleteDepartment(id);
-      } catch (err: any) {
-        alert(err.message || 'Erro ao excluir setor.');
-      }
+  const handleDeleteClick = (id: string, deptName: string) => {
+    setDeptToDelete({ id, name: deptName });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deptToDelete) return;
+    try {
+      await onDeleteDepartment(deptToDelete.id);
+      setActionFeedback({
+        type: 'success',
+        text: `Setor "${deptToDelete.name}" excluído com sucesso.`
+      });
+      setTimeout(() => setActionFeedback(null), 4000);
+    } catch (err: any) {
+      setActionFeedback({
+        type: 'error',
+        text: err.message || 'Erro ao excluir setor.'
+      });
+      setTimeout(() => setActionFeedback(null), 5000);
+    } finally {
+      setDeptToDelete(null);
     }
   };
 
@@ -193,7 +210,7 @@ export const DepartmentsView: React.FC<DepartmentsViewProps> = ({
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      onClick={() => handleDelete(dept.id, dept.name)}
+                      onClick={() => handleDeleteClick(dept.id, dept.name)}
                       className="p-1.5 rounded bg-slate-800 hover:bg-red-950 text-slate-400 hover:text-red-400 transition-colors"
                       title="Excluir Setor"
                     >
@@ -390,6 +407,31 @@ export const DepartmentsView: React.FC<DepartmentsViewProps> = ({
           </div>
         </div>
       )}
+      {/* Feedback de Ação */}
+      {actionFeedback && (
+        <div
+          className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-between ${
+            actionFeedback.type === 'success'
+              ? 'bg-emerald-950/80 border-emerald-700 text-emerald-300'
+              : 'bg-red-950/80 border-red-700 text-red-300'
+          }`}
+        >
+          <span>{actionFeedback.text}</span>
+          <button onClick={() => setActionFeedback(null)} className="text-slate-400 hover:text-white">✕</button>
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Exclusão de Setor */}
+      <ConfirmModal
+        isOpen={!!deptToDelete}
+        title="Excluir Setor"
+        message={`Tem certeza que deseja excluir o setor "${deptToDelete?.name}"? Se houver materiais cadastrados neste setor, você deve reassociá-los antes de excluir.`}
+        confirmLabel="Sim, Excluir"
+        cancelLabel="Cancelar"
+        isDestructive={true}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeptToDelete(null)}
+      />
     </div>
   );
 };

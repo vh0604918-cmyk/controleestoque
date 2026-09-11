@@ -140,7 +140,9 @@ export default function App() {
       {/* Top Navbar */}
       <Navbar
         user={currentUser}
-        onLogout={() => alert('Sessão ativa mantida.')}
+        onLogout={() => {
+          // Mantém sessão corporativa segura do Responsável Técnico
+        }}
         criticalCount={criticalMaterialsCount}
         onSelectView={(v) => setCurrentView(v)}
         toggleMobileMenu={() => setSidebarMobileOpen(!sidebarMobileOpen)}

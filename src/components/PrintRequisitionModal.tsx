@@ -14,7 +14,11 @@ export const PrintRequisitionModal: React.FC<PrintRequisitionModalProps> = ({
   if (!requisition) return null;
 
   const handlePrint = () => {
-    window.print();
+    try {
+      window.print();
+    } catch (e) {
+      console.warn('Impressão bloqueada ou não suportada no container:', e);
+    }
   };
 
   const formatCurrency = (val?: number) => {

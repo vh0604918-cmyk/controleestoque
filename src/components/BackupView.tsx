@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { api } from '../services/api.ts';
 import { Material, Department, Movement, Requisition } from '../types.ts';
+import { ConfirmModal } from './ConfirmModal.tsx';
 import {
   Database,
   Download,
@@ -10,7 +11,8 @@ import {
   CheckCircle2,
   HardDrive,
   FileJson,
-  ShieldAlert
+  ShieldAlert,
+  RotateCcw
 } from 'lucide-react';
 
 interface BackupViewProps {
@@ -30,7 +32,10 @@ export const BackupView: React.FC<BackupViewProps> = ({
 }) => {
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleExport = async () => {
@@ -63,20 +68,20 @@ export const BackupView: React.FC<BackupViewProps> = ({
     }
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setPendingFile(file);
+  };
 
-    if (!window.confirm('ATENÇÃO: Restaurar um backup substituirá a base de dados atual. Deseja prosseguir?')) {
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      return;
-    }
+  const handleConfirmImport = async () => {
+    if (!pendingFile) return;
 
     try {
       setIsImporting(true);
       setStatusMsg(null);
 
-      const fileText = await file.text();
+      const fileText = await pendingFile.text();
       const parsedData = JSON.parse(fileText);
 
       await api.importBackup(parsedData);
@@ -92,7 +97,29 @@ export const BackupView: React.FC<BackupViewProps> = ({
       });
     } finally {
       setIsImporting(false);
+      setPendingFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleConfirmReset = async () => {
+    try {
+      setIsResetting(true);
+      setStatusMsg(null);
+      await api.resetDemo();
+      setStatusMsg({
+        type: 'success',
+        text: 'Sistema redefinido com sucesso para a base original limpa (Victor Hugo como Responsável Técnico)!'
+      });
+      onDataRestored();
+    } catch (err: any) {
+      setStatusMsg({
+        type: 'error',
+        text: err.message || 'Falha ao redefinir a base de dados.'
+      });
+    } finally {
+      setIsResetting(false);
+      setIsResetConfirmOpen(false);
     }
   };
 
@@ -103,63 +130,68 @@ export const BackupView: React.FC<BackupViewProps> = ({
         <div>
           <h1 className="text-2xl font-extrabold text-white tracking-tight flex items-center gap-2">
             <span className="w-2.5 h-6 bg-amber-400 rounded-xs inline-block"></span>
-            Backup e Governança de Dados
+            Cópia de Segurança & Manutenção de Dados
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Exportação completa para salvaguarda, restauração de emergência e integridade das informações.
+            Exportação, importação e restauração completa da integridade da base de estoque.
           </p>
         </div>
+
+        <button
+          onClick={() => setIsResetConfirmOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-amber-400/20 text-amber-300 border border-amber-400/30 rounded-lg text-xs font-semibold shadow-sm transition-colors"
+        >
+          <RotateCcw className="w-4 h-4" />
+          <span>Resetar / Fazer Tudo de Novo</span>
+        </button>
       </div>
 
+      {/* Alerta de Status */}
       {statusMsg && (
         <div
-          className={`p-4 rounded-xl border text-xs flex items-center gap-3 ${
+          className={`p-4 rounded-xl border flex items-center gap-3 text-xs font-semibold animate-fadeIn ${
             statusMsg.type === 'success'
-              ? 'bg-emerald-950/70 border-emerald-700 text-emerald-300'
-              : 'bg-red-950/70 border-red-700 text-red-300'
+              ? 'bg-emerald-950/80 border-emerald-700 text-emerald-300'
+              : 'bg-red-950/80 border-red-700 text-red-300'
           }`}
         >
           {statusMsg.type === 'success' ? (
-            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400" />
           ) : (
-            <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
+            <AlertTriangle className="w-5 h-5 shrink-0 text-red-400" />
           )}
           <span>{statusMsg.text}</span>
         </div>
       )}
 
-      {/* Estatísticas da Base de Dados Atual */}
+      {/* Resumo da Base Atual */}
       <div className="bg-[#0D1B36] border border-blue-900/50 rounded-xl p-5 shadow-lg">
-        <h2 className="text-sm font-bold text-white tracking-tight mb-4 flex items-center gap-2">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
           <HardDrive className="w-4 h-4 text-amber-400" />
-          Status Atual da Base de Dados Persistente
-        </h2>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
-          <div className="bg-slate-900/60 p-3 rounded-lg border border-blue-900/30">
-            <span className="text-[10px] uppercase font-bold text-slate-400 block">Materiais Cadastrados</span>
-            <span className="text-xl font-black text-white font-mono">{materials.length}</span>
+          <span>Estatísticas Atuais da Base Persistida</span>
+        </h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+          <div className="bg-slate-900/60 p-3 rounded-lg border border-blue-900/40">
+            <div className="text-[10px] text-slate-400 uppercase font-semibold">Materiais</div>
+            <div className="text-lg font-bold font-mono text-white mt-0.5">{materials.length}</div>
           </div>
-
-          <div className="bg-slate-900/60 p-3 rounded-lg border border-blue-900/30">
-            <span className="text-[10px] uppercase font-bold text-slate-400 block">Setores e Departamentos</span>
-            <span className="text-xl font-black text-white font-mono">{departments.length}</span>
+          <div className="bg-slate-900/60 p-3 rounded-lg border border-blue-900/40">
+            <div className="text-[10px] text-slate-400 uppercase font-semibold">Setores</div>
+            <div className="text-lg font-bold font-mono text-white mt-0.5">{departments.length}</div>
           </div>
-
-          <div className="bg-slate-900/60 p-3 rounded-lg border border-blue-900/30">
-            <span className="text-[10px] uppercase font-bold text-slate-400 block">Histórico de Movimentações</span>
-            <span className="text-xl font-black text-amber-400 font-mono">{movements.length}</span>
+          <div className="bg-slate-900/60 p-3 rounded-lg border border-blue-900/40">
+            <div className="text-[10px] text-slate-400 uppercase font-semibold">Movimentações</div>
+            <div className="text-lg font-bold font-mono text-white mt-0.5">{movements.length}</div>
           </div>
-
-          <div className="bg-slate-900/60 p-3 rounded-lg border border-blue-900/30">
-            <span className="text-[10px] uppercase font-bold text-slate-400 block">Requisições Emitidas</span>
-            <span className="text-xl font-black text-blue-400 font-mono">{requisitions.length}</span>
+          <div className="bg-slate-900/60 p-3 rounded-lg border border-blue-900/40">
+            <div className="text-[10px] text-slate-400 uppercase font-semibold">Requisições</div>
+            <div className="text-lg font-bold font-mono text-white mt-0.5">{requisitions.length}</div>
           </div>
         </div>
       </div>
 
-      {/* Ações de Backup */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Painéis de Ação (Exportar, Importar, Resetar) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Exportar Backup */}
         <div className="bg-[#0D1B36] border border-blue-900/50 rounded-xl p-6 shadow-lg flex flex-col justify-between space-y-4">
           <div>
@@ -167,10 +199,10 @@ export const BackupView: React.FC<BackupViewProps> = ({
               <Download className="w-5 h-5" />
             </div>
             <h3 className="text-base font-bold text-white tracking-tight">
-              Exportar Backup Completo (JSON)
+              Exportar Cópia Completa
             </h3>
             <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-              Gera um snapshot completo de todos os materiais, setores, histórico de movimentações, custos e requisições. O arquivo pode ser guardado com segurança ou migrado para outro servidor.
+              Gera um arquivo JSON integral contendo o catálogo de materiais, setores, todo o histórico de entradas e saídas e as requisições emitidas.
             </p>
           </div>
 
@@ -180,7 +212,7 @@ export const BackupView: React.FC<BackupViewProps> = ({
             className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xs shadow-md transition-colors disabled:opacity-50"
           >
             <Download className="w-4 h-4" />
-            <span>{isExporting ? 'Exportando dados...' : 'Baixar Arquivo de Backup'}</span>
+            <span>{isExporting ? 'Exportando dados...' : 'Baixar Arquivo JSON'}</span>
           </button>
         </div>
 
@@ -191,10 +223,10 @@ export const BackupView: React.FC<BackupViewProps> = ({
               <Upload className="w-5 h-5" />
             </div>
             <h3 className="text-base font-bold text-white tracking-tight">
-              Restaurar Backup de Dados
+              Restaurar via Arquivo JSON
             </h3>
             <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-              Carregue um arquivo JSON gerado anteriormente por este sistema para recuperar dados ou sincronizar o ambiente. Esta ação substituirá os registros atuais.
+              Carregue um arquivo de backup previamente exportado. O sistema validará a estrutura dos dados e restaurará os registros salvos.
             </p>
           </div>
 
@@ -203,19 +235,43 @@ export const BackupView: React.FC<BackupViewProps> = ({
               type="file"
               ref={fileInputRef}
               accept=".json"
-              onChange={handleFileChange}
+              onChange={handleFileSelect}
               className="hidden"
               id="file-backup-input"
             />
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={isImporting}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-lg text-xs shadow-md transition-colors disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-xs shadow-md transition-colors disabled:opacity-50"
             >
               <Upload className="w-4 h-4" />
-              <span>{isImporting ? 'Restaurando base...' : 'Selecionar Arquivo JSON para Restaurar'}</span>
+              <span>{isImporting ? 'Restaurando base...' : 'Carregar Arquivo JSON'}</span>
             </button>
           </div>
+        </div>
+
+        {/* Resetar / Fazer Tudo de Novo */}
+        <div className="bg-[#0D1B36] border border-blue-900/50 rounded-xl p-6 shadow-lg flex flex-col justify-between space-y-4">
+          <div>
+            <div className="w-10 h-10 rounded-lg bg-red-500/20 border border-red-500/30 flex items-center justify-center text-red-400 mb-3">
+              <RotateCcw className="w-5 h-5" />
+            </div>
+            <h3 className="text-base font-bold text-white tracking-tight">
+              Reiniciar / Fazer Tudo de Novo
+            </h3>
+            <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+              Restaura a base oficial pré-configurada, recriando materiais, setores, saldos de estoque e histórico de movimentações com Victor Hugo como gestor.
+            </p>
+          </div>
+
+          <button
+            onClick={() => setIsResetConfirmOpen(true)}
+            disabled={isResetting}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-lg text-xs shadow-md transition-colors disabled:opacity-50"
+          >
+            <RotateCcw className="w-4 h-4" />
+            <span>{isResetting ? 'Restaurando...' : 'Fazer Tudo de Novo (Reset)'}</span>
+          </button>
         </div>
       </div>
 
@@ -226,6 +282,33 @@ export const BackupView: React.FC<BackupViewProps> = ({
           <strong className="text-white">Política de Salvaguarda:</strong> Recomenda-se a realização semanal de backup dos dados de estoque para atendimento às normas de auditoria e conformidade contábil.
         </p>
       </div>
+
+      {/* Confirmação de Restauração via Arquivo */}
+      <ConfirmModal
+        isOpen={!!pendingFile}
+        title="Restaurar Cópia de Segurança"
+        message={`Deseja realmente restaurar a base com o arquivo "${pendingFile?.name}"? Os registros atuais serão substituídos pelos dados do arquivo.`}
+        confirmLabel="Sim, Restaurar Arquivo"
+        cancelLabel="Cancelar"
+        isDestructive={true}
+        onConfirm={handleConfirmImport}
+        onCancel={() => {
+          setPendingFile(null);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }}
+      />
+
+      {/* Confirmação de Reset / Fazer Tudo de Novo */}
+      <ConfirmModal
+        isOpen={isResetConfirmOpen}
+        title="Fazer Tudo de Novo (Reset da Base)"
+        message="Esta ação recriará todos os 10 materiais do catálogo, 6 setores organizacionais, 8 movimentações iniciais e 4 requisições corporativas completas, com Victor Hugo identificado como Responsável Técnico. Deseja prosseguir?"
+        confirmLabel="Sim, Fazer Tudo de Novo"
+        cancelLabel="Cancelar"
+        isDestructive={false}
+        onConfirm={handleConfirmReset}
+        onCancel={() => setIsResetConfirmOpen(false)}
+      />
     </div>
   );
 };

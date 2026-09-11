@@ -51,7 +51,11 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   };
 
   const handlePrint = () => {
-    window.print();
+    try {
+      window.print();
+    } catch (e) {
+      console.warn('Impressão bloqueada ou não suportada no container:', e);
+    }
   };
 
   // Processamento: Posição Atual

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Material, Department, UnitOfMeasure } from '../types.ts';
+import { ConfirmModal } from './ConfirmModal.tsx';
 import {
   Search,
   Plus,
@@ -35,7 +36,9 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
+  const [materialToDelete, setMaterialToDelete] = useState<{ id: string; name: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form states
@@ -120,13 +123,27 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
     }
   };
 
-  const handleDelete = async (id: string, matName: string) => {
-    if (window.confirm(`Tem certeza que deseja excluir o material "${matName}"? Esta operação é irreversível.`)) {
-      try {
-        await onDeleteMaterial(id);
-      } catch (err: any) {
-        alert(err.message || 'Erro ao excluir material.');
-      }
+  const handleDeleteClick = (id: string, matName: string) => {
+    setMaterialToDelete({ id, name: matName });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!materialToDelete) return;
+    try {
+      await onDeleteMaterial(materialToDelete.id);
+      setActionFeedback({
+        type: 'success',
+        text: `Material "${materialToDelete.name}" excluído com sucesso.`
+      });
+      setTimeout(() => setActionFeedback(null), 4000);
+    } catch (err: any) {
+      setActionFeedback({
+        type: 'error',
+        text: err.message || 'Erro ao excluir material.'
+      });
+      setTimeout(() => setActionFeedback(null), 5000);
+    } finally {
+      setMaterialToDelete(null);
     }
   };
 
@@ -355,7 +372,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
 
                           {/* Excluir */}
                           <button
-                            onClick={() => handleDelete(mat.id, mat.name)}
+                            onClick={() => handleDeleteClick(mat.id, mat.name)}
                             className="p-1.5 rounded bg-slate-800 hover:bg-red-950 text-slate-400 hover:text-red-400 transition-colors"
                             title="Excluir Material"
                           >
@@ -576,6 +593,31 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
           </div>
         </div>
       )}
+      {/* Feedback de Ação */}
+      {actionFeedback && (
+        <div
+          className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-between ${
+            actionFeedback.type === 'success'
+              ? 'bg-emerald-950/80 border-emerald-700 text-emerald-300'
+              : 'bg-red-950/80 border-red-700 text-red-300'
+          }`}
+        >
+          <span>{actionFeedback.text}</span>
+          <button onClick={() => setActionFeedback(null)} className="text-slate-400 hover:text-white">✕</button>
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Exclusão */}
+      <ConfirmModal
+        isOpen={!!materialToDelete}
+        title="Excluir Material"
+        message={`Tem certeza que deseja excluir o material "${materialToDelete?.name}"? Se este material possuir histórico de movimentações, a integridade do banco bloqueará a exclusão.`}
+        confirmLabel="Sim, Excluir"
+        cancelLabel="Cancelar"
+        isDestructive={true}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setMaterialToDelete(null)}
+      />
     </div>
   );
 };

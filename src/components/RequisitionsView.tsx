@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Requisition, Material, Department, RequisitionPriority, RequisitionItem } from '../types.ts';
+import { ConfirmModal } from './ConfirmModal.tsx';
 import {
   FileText,
   Plus,
@@ -40,6 +41,14 @@ export const RequisitionsView: React.FC<RequisitionsViewProps> = ({
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [printRequisition, setPrintRequisition] = useState<Requisition | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    isDestructive: boolean;
+    onConfirm: () => Promise<void> | void;
+  } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form states
@@ -145,29 +154,72 @@ export const RequisitionsView: React.FC<RequisitionsViewProps> = ({
   const handleApprove = async (req: Requisition) => {
     try {
       await onUpdateStatus(req.id, 'APROVADA', userName);
+      setActionFeedback({
+        type: 'success',
+        text: `Requisição ${req.code} aprovada com sucesso.`
+      });
+      setTimeout(() => setActionFeedback(null), 4000);
     } catch (err: any) {
-      alert(err.message || 'Erro ao aprovar requisição.');
+      setActionFeedback({
+        type: 'error',
+        text: err.message || 'Erro ao aprovar requisição.'
+      });
+      setTimeout(() => setActionFeedback(null), 5000);
     }
   };
 
-  const handleFulfill = async (req: Requisition) => {
-    if (window.confirm(`Deseja atender a requisição ${req.code}? Isso baixará automaticamente os materiais do estoque.`)) {
-      try {
-        await onFulfillRequisition(req.id);
-      } catch (err: any) {
-        alert(err.message || 'Erro ao atender requisição.');
+  const handleFulfill = (req: Requisition) => {
+    setConfirmAction({
+      title: `Atender Requisição ${req.code}`,
+      message: `Confirma a entrega dos materiais requisitados? O sistema registrará as saídas automáticas de estoque e mudará o status para ATENDIDA.`,
+      confirmLabel: 'Sim, Atender Requisição',
+      isDestructive: false,
+      onConfirm: async () => {
+        try {
+          await onFulfillRequisition(req.id);
+          setActionFeedback({
+            type: 'success',
+            text: `Requisição ${req.code} atendida e estoque baixado com sucesso.`
+          });
+          setTimeout(() => setActionFeedback(null), 4000);
+        } catch (err: any) {
+          setActionFeedback({
+            type: 'error',
+            text: err.message || 'Erro ao atender requisição.'
+          });
+          setTimeout(() => setActionFeedback(null), 5000);
+        } finally {
+          setConfirmAction(null);
+        }
       }
-    }
+    });
   };
 
-  const handleCancel = async (req: Requisition) => {
-    if (window.confirm(`Tem certeza que deseja cancelar a requisição ${req.code}?`)) {
-      try {
-        await onUpdateStatus(req.id, 'CANCELADA', userName);
-      } catch (err: any) {
-        alert(err.message || 'Erro ao cancelar requisição.');
+  const handleCancel = (req: Requisition) => {
+    setConfirmAction({
+      title: `Cancelar Requisição ${req.code}`,
+      message: `Tem certeza que deseja cancelar a requisição ${req.code}? Esta ação não poderá ser revertida.`,
+      confirmLabel: 'Sim, Cancelar',
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          await onUpdateStatus(req.id, 'CANCELADA', userName);
+          setActionFeedback({
+            type: 'success',
+            text: `Requisição ${req.code} cancelada com sucesso.`
+          });
+          setTimeout(() => setActionFeedback(null), 4000);
+        } catch (err: any) {
+          setActionFeedback({
+            type: 'error',
+            text: err.message || 'Erro ao cancelar requisição.'
+          });
+          setTimeout(() => setActionFeedback(null), 5000);
+        } finally {
+          setConfirmAction(null);
+        }
       }
-    }
+    });
   };
 
   const filteredRequisitions = requisitions.filter(r => {
@@ -599,6 +651,32 @@ export const RequisitionsView: React.FC<RequisitionsViewProps> = ({
       <PrintRequisitionModal
         requisition={printRequisition}
         onClose={() => setPrintRequisition(null)}
+      />
+
+      {/* Feedback de Ação */}
+      {actionFeedback && (
+        <div
+          className={`fixed bottom-5 right-5 z-50 p-3.5 rounded-xl border text-xs font-semibold shadow-2xl flex items-center gap-3 animate-slideUp ${
+            actionFeedback.type === 'success'
+              ? 'bg-emerald-950 border-emerald-700 text-emerald-300'
+              : 'bg-red-950 border-red-700 text-red-300'
+          }`}
+        >
+          <span>{actionFeedback.text}</span>
+          <button onClick={() => setActionFeedback(null)} className="text-slate-400 hover:text-white">✕</button>
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Ações de Requisição */}
+      <ConfirmModal
+        isOpen={!!confirmAction}
+        title={confirmAction?.title || 'Confirmação'}
+        message={confirmAction?.message || ''}
+        confirmLabel={confirmAction?.confirmLabel || 'Confirmar'}
+        cancelLabel="Voltar"
+        isDestructive={confirmAction?.isDestructive || false}
+        onConfirm={() => confirmAction?.onConfirm()}
+        onCancel={() => setConfirmAction(null)}
       />
     </div>
   );
